@@ -1,0 +1,584 @@
+<!-- Inspired from https://experiments.withgoogle.com/webcam-toy -->
+<!-- https://webcamtoy.com/ -->
+<!-- Filters with shaders on the web realtime. -->
+ 
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>RetroCam</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+    
+    html, body {
+      margin: 0;
+      background: #0a0a0a;
+      overflow: hidden;
+      font-family: 'Orbitron', monospace;
+      color: #00ff00;
+    }
+    
+    #canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      filter: contrast(1.1) brightness(0.95);
+    }
+    
+    /* Camera UI Overlay */
+    .camera-ui {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 10;
+    }
+    
+    /* Viewfinder Grid */
+    .viewfinder {
+      position: absolute;
+      top: 10%;
+      left: 10%;
+      width: 80%;
+      height: 80%;
+      border: 2px solid rgba(0, 255, 0, 0.3);
+      background: 
+        linear-gradient(90deg, transparent 33%, rgba(0, 255, 0, 0.1) 33%, rgba(0, 255, 0, 0.1) 34%, transparent 34%, transparent 66%, rgba(0, 255, 0, 0.1) 66%, rgba(0, 255, 0, 0.1) 67%, transparent 67%),
+        linear-gradient(0deg, transparent 33%, rgba(0, 255, 0, 0.1) 33%, rgba(0, 255, 0, 0.1) 34%, transparent 34%, transparent 66%, rgba(0, 255, 0, 0.1) 66%, rgba(0, 255, 0, 0.1) 67%, transparent 67%);
+    }
+    
+    /* Corner Brackets */
+    .viewfinder::before,
+    .viewfinder::after {
+      content: '';
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      border: 2px solid #00ff00;
+    }
+    
+    .viewfinder::before {
+      top: -2px;
+      left: -2px;
+      border-right: none;
+      border-bottom: none;
+    }
+    
+    .viewfinder::after {
+      bottom: -2px;
+      right: -2px;
+      border-left: none;
+      border-top: none;
+    }
+    
+    /* HUD Elements */
+    .hud-top {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      right: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 14px;
+      text-shadow: 0 0 10px #00ff00;
+    }
+    
+    .hud-bottom {
+      position: absolute;
+      bottom: 80px;
+      left: 20px;
+      right: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      text-shadow: 0 0 10px #00ff00;
+    }
+    
+    .status-light {
+      width: 8px;
+      height: 8px;
+      background: #ff0000;
+      border-radius: 50%;
+      animation: blink 2s infinite;
+      margin-right: 8px;
+    }
+    
+    .recording-indicator {
+      display: flex;
+      align-items: center;
+      color: #ff0000;
+      font-weight: 700;
+    }
+    
+    @keyframes blink {
+      0%, 50% { opacity: 1; }
+      51%, 100% { opacity: 0.3; }
+    }
+    
+    .battery {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    
+    .battery-icon {
+      width: 20px;
+      height: 10px;
+      border: 1px solid #00ff00;
+      position: relative;
+    }
+    
+    .battery-icon::after {
+      content: '';
+      position: absolute;
+      right: -3px;
+      top: 2px;
+      width: 2px;
+      height: 6px;
+      background: #00ff00;
+    }
+    
+    .battery-level {
+      position: absolute;
+      left: 1px;
+      top: 1px;
+      width: 16px;
+      height: 8px;
+      background: linear-gradient(90deg, #00ff00 0%, #ffff00 50%, #ff0000 100%);
+    }
+    
+    /* Control Buttons */
+    .controls {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 20px;
+      pointer-events: auto;
+    }
+    
+    .btn {
+      padding: 12px 24px;
+      font-size: 14px;
+      font-family: 'Orbitron', monospace;
+      font-weight: 700;
+      background: linear-gradient(145deg, #1a1a1a, #000);
+      border: 2px solid #00ff00;
+      color: #00ff00;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-shadow: 0 0 10px #00ff00;
+      box-shadow: 
+        0 0 20px rgba(0, 255, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+    
+    .btn:hover {
+      background: linear-gradient(145deg, #2a2a2a, #111);
+      box-shadow: 
+        0 0 30px rgba(0, 255, 0, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      transform: translateY(-2px);
+    }
+    
+    .btn:active {
+      transform: translateY(0);
+      box-shadow: 
+        0 0 15px rgba(0, 255, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+    
+    .btn.active {
+      background: linear-gradient(145deg, #003300, #001100);
+      color: #00ffff;
+      border-color: #00ffff;
+      text-shadow: 0 0 10px #00ffff;
+    }
+    
+    /* Scanlines Effect */
+    .scanlines {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(
+        transparent 50%, 
+        rgba(0, 255, 0, 0.03) 50%
+      );
+      background-size: 100% 4px;
+      pointer-events: none;
+      animation: scanlines 0.1s linear infinite;
+    }
+    
+    @keyframes scanlines {
+      0% { transform: translateY(0); }
+      100% { transform: translateY(4px); }
+    }
+    
+    /* Film Grain Overlay */
+    .grain {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0.15;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+      pointer-events: none;
+      animation: grain 0.5s steps(10) infinite;
+    }
+    
+    @keyframes grain {
+      0%, 100% { transform: translate(0, 0); }
+      10% { transform: translate(-1px, -1px); }
+      20% { transform: translate(1px, 1px); }
+      30% { transform: translate(-1px, 1px); }
+      40% { transform: translate(1px, -1px); }
+      50% { transform: translate(-1px, -1px); }
+      60% { transform: translate(1px, 1px); }
+      70% { transform: translate(-1px, 1px); }
+      80% { transform: translate(1px, -1px); }
+      90% { transform: translate(-1px, -1px); }
+    }
+    
+    /* Vignette Overlay */
+    .vignette {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle at center, transparent 30%, rgba(0, 0, 0, 0.8) 100%);
+      pointer-events: none;
+    }
+    
+    /* Flash Effect */
+    .flash {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: white;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 1000;
+    }
+    
+    .flash.active {
+      animation: flash 0.3s ease-out;
+    }
+    
+    @keyframes flash {
+      0% { opacity: 0; }
+      50% { opacity: 0.8; }
+      100% { opacity: 0; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <video id="video" autoplay playsinline style="display:none;"></video>
+  
+  <!-- Camera UI Overlay -->
+  <div class="camera-ui">
+    <div class="viewfinder"></div>
+    
+    <div class="hud-top">
+      <div class="recording-indicator">
+        <div class="status-light"></div>
+        <span>REC</span>
+      </div>
+      <div style="font-weight: 700;">RETRO-CAM v2.0</div>
+      <div class="battery">
+        <div class="battery-icon">
+          <div class="battery-level"></div>
+        </div>
+        <span>98%</span>
+      </div>
+    </div>
+    
+    <div class="hud-bottom">
+      <div>MODE: VINTAGE</div>
+      <div id="timestamp">--:--:--</div>
+      <div>ISO: 800</div>
+    </div>
+    
+    <div class="scanlines"></div>
+    <div class="grain"></div>
+    <div class="vignette"></div>
+  </div>
+  
+  <div class="controls">
+    <button class="btn" id="filterBtn">🎨 FILTER</button>
+    <button class="btn" id="snap">📸 SNAP</button>
+    <button class="btn" id="modeBtn">⚙️ MODE</button>
+  </div>
+  
+  <div class="flash" id="flash"></div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const gl = canvas.getContext('webgl');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const video = document.getElementById('video');
+    navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+      video.srcObject = stream;
+    });
+
+    let currentFilter = 0;
+    const filters = ['vintage', 'cyberpunk', 'vhs', 'polaroid'];
+
+    const vertex = `
+      attribute vec2 a_position;
+      varying vec2 v_uv;
+      void main() {
+        v_uv = vec2(1.0 - ((a_position.x + 1.0) * 0.5), 1.0 - ((a_position.y + 1.0) * 0.5));
+        gl_Position = vec4(a_position, 0, 1);
+      }
+    `;
+
+    const fragment = `
+      precision mediump float;
+      uniform sampler2D u_tex;
+      uniform float u_time;
+      uniform int u_filter;
+      varying vec2 v_uv;
+
+      float rand(vec2 co) {
+        return fract(sin(dot(co.xy, vec2(12.9898, 78.233))) * 43758.5453);
+      }
+
+      vec3 vintage(vec3 color, vec2 uv) {
+        // Enhanced sepia with color shifts
+        vec3 sepia = vec3(
+          dot(color, vec3(0.493, 0.869, 0.289)),
+          dot(color, vec3(0.449, 0.786, 0.268)),
+          dot(color, vec3(0.372, 0.634, 0.131))
+        );
+        
+        // Film grain
+        float grain = (rand(uv * 1000.0 + u_time * 0.1) - 0.5) * 0.15;
+        sepia += grain;
+        
+        // Vignette
+        float d = distance(uv, vec2(0.5));
+        sepia *= smoothstep(0.9, 0.3, d);
+        
+        // Slight color temperature shift
+        sepia.r *= 1.1;
+        sepia.b *= 0.8;
+        
+        return sepia;
+      }
+
+      vec3 cyberpunk(vec3 color, vec2 uv) {
+        // Neon color enhancement
+        color.r *= 1.2;
+        color.g *= 1.5;
+        color.b *= 0.8;
+        
+        // Scanlines
+        float scanline = sin(uv.y * 800.0) * 0.04;
+        color += scanline;
+        
+        // Chromatic aberration
+        float aberration = 0.003;
+        color.r = texture2D(u_tex, uv + vec2(aberration, 0.0)).r;
+        color.b = texture2D(u_tex, uv - vec2(aberration, 0.0)).b;
+        
+        // Glow effect
+        float glow = dot(color, vec3(0.299, 0.587, 0.114));
+        color += glow * 0.3 * vec3(0.0, 1.0, 1.0);
+        
+        return color;
+      }
+
+      vec3 vhs(vec3 color, vec2 uv) {
+        // VHS distortion
+        float distortion = sin(uv.y * 50.0 + u_time * 2.0) * 0.002;
+        vec2 distortedUV = uv + vec2(distortion, 0.0);
+        color = texture2D(u_tex, distortedUV).rgb;
+        
+        // Color bleeding
+        color.r = texture2D(u_tex, distortedUV + vec2(0.001, 0.0)).r;
+        color.b = texture2D(u_tex, distortedUV - vec2(0.001, 0.0)).b;
+        
+        // Static noise
+        float noise = rand(uv + u_time * 0.1) * 0.1;
+        color += noise;
+        
+        // Horizontal lines
+        float lines = step(0.98, sin(uv.y * 400.0)) * 0.1;
+        color += lines;
+        
+        // Desaturation
+        float gray = dot(color, vec3(0.299, 0.587, 0.114));
+        color = mix(color, vec3(gray), 0.3);
+        
+        return color;
+      }
+
+      vec3 polaroid(vec3 color, vec2 uv) {
+        // Polaroid color cast
+        color *= vec3(1.2, 1.1, 0.9);
+        
+        // Soft vignette
+        float d = distance(uv, vec2(0.5));
+        color *= smoothstep(0.8, 0.2, d);
+        
+        // Slight overexposure
+        color = pow(color, vec3(0.8));
+        
+        // Film grain
+        float grain = (rand(uv * 500.0) - 0.5) * 0.08;
+        color += grain;
+        
+        // Border darkening
+        float border = smoothstep(0.0, 0.05, uv.x) * 
+                      smoothstep(0.0, 0.05, uv.y) * 
+                      smoothstep(0.0, 0.05, 1.0 - uv.x) * 
+                      smoothstep(0.0, 0.05, 1.0 - uv.y);
+        color *= border;
+        
+        return color;
+      }
+
+      void main() {
+        vec3 color = texture2D(u_tex, v_uv).rgb;
+        
+        if (u_filter == 0) {
+          color = vintage(color, v_uv);
+        } else if (u_filter == 1) {
+          color = cyberpunk(color, v_uv);
+        } else if (u_filter == 2) {
+          color = vhs(color, v_uv);
+        } else if (u_filter == 3) {
+          color = polaroid(color, v_uv);
+        }
+        
+        gl_FragColor = vec4(color, 1.0);
+      }
+    `;
+
+    function compileShader(type, src) {
+      const shader = gl.createShader(type);
+      gl.shaderSource(shader, src);
+      gl.compileShader(shader);
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        console.error(gl.getShaderInfoLog(shader));
+      }
+      return shader;
+    }
+
+    const vs = compileShader(gl.VERTEX_SHADER, vertex);
+    const fs = compileShader(gl.FRAGMENT_SHADER, fragment);
+
+    const program = gl.createProgram();
+    gl.attachShader(program, vs);
+    gl.attachShader(program, fs);
+    gl.linkProgram(program);
+    gl.useProgram(program);
+
+    const pos = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, pos);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+      -1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1,
+    ]), gl.STATIC_DRAW);
+
+    const loc = gl.getAttribLocation(program, 'a_position');
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+    const texLoc = gl.getUniformLocation(program, 'u_tex');
+    const timeLoc = gl.getUniformLocation(program, 'u_time');
+    const filterLoc = gl.getUniformLocation(program, 'u_filter');
+
+    function render() {
+      if (video.readyState >= 2) {
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, video);
+
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        
+        gl.uniform1f(timeLoc, Date.now() * 0.001);
+        gl.uniform1i(filterLoc, currentFilter);
+        
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+      }
+      requestAnimationFrame(render);
+    }
+
+    render();
+
+    // Update timestamp
+    function updateTime() {
+      const now = new Date();
+      document.getElementById('timestamp').textContent = 
+        now.toLocaleTimeString('en-US', { hour12: false });
+    }
+    setInterval(updateTime, 1000);
+    updateTime();
+
+    // Filter switching
+    document.getElementById('filterBtn').onclick = () => {
+      currentFilter = (currentFilter + 1) % filters.length;
+      const btn = document.getElementById('filterBtn');
+      btn.textContent = `🎨 ${filters[currentFilter].toUpperCase()}`;
+      btn.classList.add('active');
+      setTimeout(() => btn.classList.remove('active'), 300);
+    };
+
+    // Snapshot with flash effect
+    document.getElementById('snap').onclick = () => {
+      const flash = document.getElementById('flash');
+      flash.classList.add('active');
+      
+      setTimeout(() => {
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        const ctx = tempCanvas.getContext('2d');
+        ctx.drawImage(canvas, 0, 0);
+
+        const link = document.createElement('a');
+        link.download = `retro_${filters[currentFilter]}_${Date.now()}.png`;
+        link.href = tempCanvas.toDataURL('image/png');
+        link.click();
+        
+        flash.classList.remove('active');
+      }, 150);
+    };
+
+    // Mode button (placeholder)
+    document.getElementById('modeBtn').onclick = () => {
+      const btn = document.getElementById('modeBtn');
+      btn.classList.add('active');
+      setTimeout(() => btn.classList.remove('active'), 300);
+    };
+
+    // Resize handling
+    window.addEventListener('resize', () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    });
+  </script>
+</body>
+</html>
