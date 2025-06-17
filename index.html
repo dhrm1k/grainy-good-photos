@@ -21,7 +21,6 @@
       filter: contrast(1.1) brightness(0.95);
     }
 
-    /* 4:3 Letterbox Effect */
     .letterbox {
       position: absolute;
       top: 0;
@@ -52,7 +51,6 @@
       height: 12.5%;
     }
 
-    /* Camera UI Overlay */
     .camera-ui {
       position: absolute;
       top: 0;
@@ -63,7 +61,6 @@
       z-index: 10;
     }
 
-    /* Viewfinder Grid - adjusted for 4:3 */
     .viewfinder {
       position: absolute;
       top: 15%;
@@ -76,7 +73,6 @@
         linear-gradient(0deg, transparent 33%, rgba(255, 0, 0, 0.1) 33%, rgba(255, 0, 0, 0.1) 34%, transparent 34%, transparent 66%, rgba(255, 0, 0, 0.1) 66%, rgba(255, 0, 0, 0.1) 67%, transparent 67%);
     }
 
-    /* Corner Brackets */
     .viewfinder::before,
     .viewfinder::after {
       content: '';
@@ -100,7 +96,6 @@
       border-top: none;
     }
 
-    /* HUD Elements */
     .hud-top {
       position: absolute;
       top: 20px;
@@ -178,7 +173,6 @@
       background: linear-gradient(90deg, #00ff00 0%, #ffff00 50%, #ff0000 100%);
     }
 
-    /* Control Buttons */
     .controls {
       position: absolute;
       bottom: 20px;
@@ -187,6 +181,7 @@
       display: flex;
       gap: 20px;
       pointer-events: auto;
+      z-index: 1001;
     }
 
     .btn {
@@ -228,7 +223,6 @@
       text-shadow: 0 0 10px #00ffff;
     }
 
-    /* Scanlines Effect - More Pronounced */
     .scanlines {
       position: absolute;
       top: 0;
@@ -249,7 +243,6 @@
       100% { transform: translateY(3px); }
     }
 
-    /* Film Grain Overlay - More Intense */
     .grain {
       position: absolute;
       top: 0;
@@ -273,7 +266,6 @@
       87.5% { transform: translate(-2px, 1px); }
     }
 
-    /* Vignette Overlay */
     .vignette {
       position: absolute;
       top: 0;
@@ -284,7 +276,6 @@
       pointer-events: none;
     }
 
-    /* Flash Effect */
     .flash {
       position: absolute;
       top: 0;
@@ -306,6 +297,25 @@
       50% { opacity: 0.8; }
       100% { opacity: 0; }
     }
+    .download-link {
+      display: block;
+      position: absolute;
+      bottom: 65px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1a1a1a;
+      color: #00ffff;
+      border: 2px solid #00ffff;
+      border-radius: 8px;
+      padding: 12px 24px;
+      font-family: 'Orbitron', monospace;
+      font-size: 15px;
+      text-decoration: none;
+      box-shadow: 0 0 10px #00ffff33;
+      z-index: 2002;
+      text-align: center;
+    }
+    .download-link:active { color: #ff0000; border-color: #ff0000; }
   </style>
 </head>
 <body>
@@ -316,7 +326,6 @@
   <div class="camera-ui">
     <div class="letterbox"></div>
     <div class="viewfinder"></div>
-
     <div class="hud-top">
       <div class="recording-indicator">
         <div class="status-light"></div>
@@ -330,13 +339,11 @@
         <span>98%</span>
       </div>
     </div>
-
     <div class="hud-bottom">
       <div>MODE: CHEAP-CAM</div>
       <div id="timestamp">--:--:--</div>
       <div>AUTO FOCUS</div>
     </div>
-
     <div class="scanlines"></div>
     <div class="grain"></div>
     <div class="vignette"></div>
@@ -358,12 +365,13 @@
     <button class="btn" id="filterBtn">🎨 FILTER</button>
     <button class="btn" id="snap">📸 SNAP</button>
     <button class="btn" id="modeBtn">⚙️ MODE</button>
+    <button class="btn" id="recordBtn" style="background:#220000;">⏺ RECORD</button>
   </div>
-
+  <a id="downloadLink" class="download-link" style="display:none"></a>
   <div class="flash" id="flash"></div>
 
   <script>
-    // ---- Camera Permission Handling for Mobile ----
+    // Camera Permission Handling for Mobile
     function isMobile() {
       return /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent);
     }
@@ -387,15 +395,12 @@
         videoReady = true;
         showPermissionUI(false);
       } catch (err) {
-        // If denied, show UI to retry
         showPermissionUI(true);
       }
     }
 
-    // Mobile: Wait for user interaction to request video permission
     window.addEventListener('DOMContentLoaded', () => {
       if (isMobile()) {
-        // Try permission directly first, but fallback to UI if not allowed
         requestCamera().then(stream => {
           video.srcObject = stream;
           videoReady = true;
@@ -404,13 +409,11 @@
         });
         document.getElementById('permission-btn').onclick = setupCamera;
       } else {
-        // Desktop: Request immediately
         setupCamera();
       }
     });
 
-    // ---- CONTINUE with the original code below ----
-
+    // WebGL filtered rendering
     const canvas = document.getElementById('canvas');
     const gl = canvas.getContext('webgl');
     canvas.width = window.innerWidth;
@@ -440,23 +443,14 @@
       }
 
       vec3 cheapCam(vec3 color, vec2 uv) {
-        // Cheap camera effects
-
-        // Poor color reproduction
         color.r *= 1.3;
         color.g *= 0.9;
         color.b *= 0.7;
-
-        // Low dynamic range - crush blacks and whites
         color = pow(color, vec3(1.2));
         color = color * 0.8 + 0.1;
-
-        // Chromatic aberration (cheap lens)
         float aberration = 0.004;
         color.r = texture2D(u_tex, uv + vec2(aberration, 0.0)).r * 1.3;
         color.b = texture2D(u_tex, uv - vec2(aberration, 0.0)).b * 0.7;
-
-        // Barrel distortion
         vec2 center = uv - 0.5;
         float dist = length(center);
         vec2 distorted = center * (1.0 + 0.1 * dist * dist);
@@ -464,109 +458,67 @@
         if (newUV.x < 0.0 || newUV.x > 1.0 || newUV.y < 0.0 || newUV.y > 1.0) {
           color *= 0.5;
         }
-
-        // Interlacing
         float interlace = step(0.5, mod(gl_FragCoord.y, 2.0)) * 0.1;
         color -= interlace;
-
-        // VHS-style noise
         float noise = (rand(uv + u_time * 0.1) - 0.5) * 0.2;
         color += noise;
-
-        // Horizontal sync issues
         float syncNoise = sin(uv.y * 300.0 + u_time * 5.0) * 0.01;
         color += syncNoise;
-
-        // Color bleeding
         color.r += texture2D(u_tex, uv + vec2(0.002, 0.0)).r * 0.1;
         color.b += texture2D(u_tex, uv - vec2(0.002, 0.0)).b * 0.1;
-
-        // Desaturation (poor color fidelity)
         float gray = dot(color, vec3(0.299, 0.587, 0.114));
         color = mix(color, vec3(gray), 0.2);
-
-        // Vignette from cheap lens
         float d = distance(uv, vec2(0.5));
         color *= smoothstep(0.8, 0.3, d);
-
         return color;
       }
 
       vec3 cyberpunk(vec3 color, vec2 uv) {
-        // Neon color enhancement
         color.r *= 1.2;
         color.g *= 1.5;
         color.b *= 0.8;
-
-        // Scanlines
         float scanline = sin(uv.y * 800.0) * 0.04;
         color += scanline;
-
-        // Chromatic aberration
         float aberration = 0.003;
         color.r = texture2D(u_tex, uv + vec2(aberration, 0.0)).r;
         color.b = texture2D(u_tex, uv - vec2(aberration, 0.0)).b;
-
-        // Glow effect
         float glow = dot(color, vec3(0.299, 0.587, 0.114));
         color += glow * 0.3 * vec3(0.0, 1.0, 1.0);
-
         return color;
       }
 
       vec3 vhs(vec3 color, vec2 uv) {
-        // VHS distortion
         float distortion = sin(uv.y * 50.0 + u_time * 2.0) * 0.002;
         vec2 distortedUV = uv + vec2(distortion, 0.0);
         color = texture2D(u_tex, distortedUV).rgb;
-
-        // Color bleeding
         color.r = texture2D(u_tex, distortedUV + vec2(0.001, 0.0)).r;
         color.b = texture2D(u_tex, distortedUV - vec2(0.001, 0.0)).b;
-
-        // Static noise
         float noise = rand(uv + u_time * 0.1) * 0.1;
         color += noise;
-
-        // Horizontal lines
         float lines = step(0.98, sin(uv.y * 400.0)) * 0.1;
         color += lines;
-
-        // Desaturation
         float gray = dot(color, vec3(0.299, 0.587, 0.114));
         color = mix(color, vec3(gray), 0.3);
-
         return color;
       }
 
       vec3 polaroid(vec3 color, vec2 uv) {
-        // Polaroid color cast
         color *= vec3(1.2, 1.1, 0.9);
-
-        // Soft vignette
         float d = distance(uv, vec2(0.5));
         color *= smoothstep(0.8, 0.2, d);
-
-        // Slight overexposure
         color = pow(color, vec3(0.8));
-
-        // Film grain
         float grain = (rand(uv * 500.0) - 0.5) * 0.08;
         color += grain;
-
-        // Border darkening
         float border = smoothstep(0.0, 0.05, uv.x) *
                       smoothstep(0.0, 0.05, uv.y) *
                       smoothstep(0.0, 0.05, 1.0 - uv.x) *
                       smoothstep(0.0, 0.05, 1.0 - uv.y);
         color *= border;
-
         return color;
       }
 
       void main() {
         vec3 color = texture2D(u_tex, v_uv).rgb;
-
         if (u_filter == 0) {
           color = cheapCam(color, v_uv);
         } else if (u_filter == 1) {
@@ -576,7 +528,6 @@
         } else if (u_filter == 3) {
           color = polaroid(color, v_uv);
         }
-
         gl_FragColor = vec4(color, 1.0);
       }
     `;
@@ -625,21 +576,16 @@
       if (video.readyState >= 2 && videoReady) {
         gl.bindTexture(gl.TEXTURE_2D, tex);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, video);
-
         gl.viewport(0, 0, canvas.width, canvas.height);
         gl.clear(gl.COLOR_BUFFER_BIT);
-
         gl.uniform1f(timeLoc, Date.now() * 0.001);
         gl.uniform1i(filterLoc, currentFilter);
-
         gl.drawArrays(gl.TRIANGLES, 0, 6);
       }
       requestAnimationFrame(render);
     }
-
     render();
 
-    // Update timestamp
     function updateTime() {
       const now = new Date();
       document.getElementById('timestamp').textContent =
@@ -648,7 +594,6 @@
     setInterval(updateTime, 1000);
     updateTime();
 
-    // Filter switching
     document.getElementById('filterBtn').onclick = () => {
       currentFilter = (currentFilter + 1) % filters.length;
       const btn = document.getElementById('filterBtn');
@@ -657,39 +602,109 @@
       setTimeout(() => btn.classList.remove('active'), 300);
     };
 
-    // Snapshot with flash effect
     document.getElementById('snap').onclick = () => {
       const flash = document.getElementById('flash');
       flash.classList.add('active');
-
       setTimeout(() => {
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = canvas.width;
         tempCanvas.height = canvas.height;
         const ctx = tempCanvas.getContext('2d');
         ctx.drawImage(canvas, 0, 0);
-
         const link = document.createElement('a');
         link.download = `retro_${filters[currentFilter]}_${Date.now()}.png`;
         link.href = tempCanvas.toDataURL('image/png');
         link.click();
-
         flash.classList.remove('active');
       }, 150);
     };
 
-    // Mode button (placeholder)
     document.getElementById('modeBtn').onclick = () => {
       const btn = document.getElementById('modeBtn');
       btn.classList.add('active');
       setTimeout(() => btn.classList.remove('active'), 300);
     };
 
-    // Resize handling
     window.addEventListener('resize', () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
     });
+
+    // ---- RECORDING FEATURE (filtered canvas video!) ----
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    let isRecording = false;
+    const recordBtn = document.getElementById('recordBtn');
+    const downloadLink = document.getElementById('downloadLink');
+    let canvasStream = null;
+    function ensureCanvasStream() {
+      if (!canvasStream) {
+        canvasStream = canvas.captureStream(30); // 30 FPS
+      }
+      return canvasStream;
+    }
+    function startRecording() {
+      if (!canvas) return;
+      recordedChunks = [];
+      let stream = ensureCanvasStream();
+      let mimeType = '';
+      if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9')) {
+        mimeType = 'video/webm;codecs=vp9';
+      } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8')) {
+        mimeType = 'video/webm;codecs=vp8';
+      } else if (MediaRecorder.isTypeSupported('video/webm')) {
+        mimeType = 'video/webm';
+      } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+        mimeType = 'video/mp4';
+      }
+      try {
+        mediaRecorder = new MediaRecorder(stream, { mimeType });
+      } catch (e) {
+        alert('Recording not supported on this browser/device.');
+        return;
+      }
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) recordedChunks.push(e.data);
+      };
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
+        const url = URL.createObjectURL(blob);
+        downloadLink.style.display = "block";
+        downloadLink.href = url;
+        downloadLink.download = `retrocam_filtered_${Date.now()}.webm`;
+        downloadLink.textContent = "⬇️ Download Video";
+        setTimeout(() => { downloadLink.style.display = "none"; }, 15000);
+      };
+      mediaRecorder.start();
+      isRecording = true;
+      recordBtn.textContent = "⏹ STOP";
+      recordBtn.classList.add('active');
+    }
+    function stopRecording() {
+      if (mediaRecorder && isRecording) {
+        mediaRecorder.stop();
+        isRecording = false;
+        recordBtn.textContent = "⏺ RECORD";
+        recordBtn.classList.remove('active');
+      }
+    }
+    recordBtn.onclick = () => {
+      if (isRecording) {
+        stopRecording();
+      } else {
+        startRecording();
+      }
+    };
+    downloadLink.onclick = () => {
+      downloadLink.style.display = "none";
+    };
+    document.addEventListener('visibilitychange', () => {
+      if (canvasStream && canvasStream.getTracks) {
+        canvasStream.getTracks().forEach(track => {
+          track.enabled = !document.hidden;
+        });
+      }
+    });
   </script>
 </body>
-</html>
+</html> 
